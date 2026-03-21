@@ -1,47 +1,43 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
+const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-const SECRET_KEY = "Sieu_Bao_Mat_Cua_CEO";
+const CLIENT_ID = "896398635150-1oi6n3ueq52s2sn6l0pdqt83a75btbbh.apps.googleusercontent.com";
+const client = new OAuth2Client(CLIENT_ID);
 
-// 📝 ĐĂNG KÝ
-router.post('/api/register', async (req, res) => {
+router.post('/google-login', async (req, res) => {
     try {
-        const { email, password, role } = req.body;
-        const checkUser = await User.findOne({ email: email });
-        if (checkUser) return res.status(400).json({ message: "Email này đã được đăng ký!" });
+        const { token } = req.body;
+        
+        // 1. Xác minh Token thật từ Google
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: CLIENT_ID,
+        });
+        
+        const payload = ticket.getPayload();
+        const { name, email, picture } = payload; // Lấy thông tin THẬT
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        console.log(`✅ Đã đăng nhập cho: ${name}`);
 
-        const newUser = new User({ email: email, password: hashedPassword, role: role || 'tutor' });
-        await newUser.save();
+        // 2. Tạo Token thật của hệ thống
+        const jwtToken = jwt.sign(
+            { email, name }, 
+            process.env.JWT_SECRET || 'chuoi_bi_mat_123', 
+            { expiresIn: '1d' }
+        );
 
-        console.log(`🎉 Đã có người đăng ký mới: ${email}`);
-        res.status(201).json({ message: "Đăng ký thành công!" });
+        // 3. Trả về thông tin THẬT
+        res.json({
+            message: "Đăng nhập thành công!",
+            user: { name, email, picture },
+            token: jwtToken
+        });
+
     } catch (error) {
-        res.status(500).json({ message: "Lỗi hệ thống đăng ký!" });
-    }
-});
-
-// 🔑 ĐĂNG NHẬP
-router.post('/api/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const user = await User.findOne({ email: email });
-        if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản này!" });
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: "Mật khẩu sai rồi Sếp ơi!" });
-
-        const token = jwt.sign({ userId: user._id, role: user.role }, SECRET_KEY, { expiresIn: '1d' });
-
-        console.log(`🔓 Ai đó vừa đăng nhập thành công: ${email}`);
-        res.json({ message: "Đăng nhập thành công!", token, role: user.role, email: user.email });
-    } catch (error) {
-        res.status(500).json({ message: "Lỗi hệ thống đăng nhập!" });
+        console.log("🔴 Lỗi xác thực:", error);
+        res.status(500).json({ message: "Lỗi Server!" });
     }
 });
 
