@@ -19,7 +19,7 @@ router.post('/register', async (req, res) => {
         // 1. Kiểm tra xem email này có ai dùng chưa
         const existingUser = await User.findOne({ email: email });
         if (existingUser) {
-            return res.status(400).json({ message: "Email này đã có người dùng rồi Sếp ơi!" });
+            return res.status(400).json({ message: "Email này đã có người sử dụng!" });
         }
 
         // 2. Mã hóa mật khẩu
@@ -55,7 +55,7 @@ router.post('/login', async (req, res) => {
 
         const user = await User.findOne({ email: email });
         if (!user) {
-            return res.status(400).json({ message: "Email này chưa được đăng ký Sếp ơi!" });
+            return res.status(400).json({ message: "Email này chưa được đăng ký, vui lòng đăng kí trước nhé!" });
         }
 
         // Nếu là user từ Google, họ sẽ không có password trong Database

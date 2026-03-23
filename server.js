@@ -6,14 +6,16 @@ require('dotenv').config();
 // 1. Nhập khẩu các bộ phận
 const authRoutes = require('./routes/authRoutes');
 const tutorRoutes = require('./routes/tutorRoutes');
-
+const bookingRoutes = require('./routes/bookingRoutes');
 const app = express();
 
-// CẤU HÌNH QUAN TRỌNG: Cho phép Frontend truy cập
+// Cho phép Frontend truy cập
 app.use(cors());
 app.use(express.json());
 
 // 2. Cắm điện cho các đường ray
+// Thêm '/bookings' vào ổ cắm để nó khớp với Frontend
+app.use('/api/bookings', bookingRoutes); 
 app.use('/api/auth', authRoutes); 
 app.use('/api', tutorRoutes);
 
