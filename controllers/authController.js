@@ -3,7 +3,7 @@ const router = express.Router();
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken'); // Dùng để tạo vé vào cửa
 
-// Nhập chính xác mã Client ID của Sếp vào đây
+// Nhập chính xác mã Client ID của admin vào đây
 const CLIENT_ID = "896398635150-1oi6n3ueq52s2sn6l0pdqt83a75btbbh.apps.googleusercontent.com";
 const client = new OAuth2Client(CLIENT_ID);
 
@@ -25,7 +25,7 @@ router.post('/google-login', async (req, res) => {
         console.log(`Người dùng thật đang đăng nhập: ${name} - ${email}`);
 
         // 3. Tạo thẻ ra vào (JWT Token) của riêng hệ thống TutorLink
-        // LƯU Ý: Phải đảm bảo Sếp đã có dòng JWT_SECRET=chuoi_bi_mat trong file .env nhé
+        // LƯU Ý: Phải đảm bảo đã có dòng JWT_SECRET=chuoi_bi_mat trong file .env 
         const jwtToken = jwt.sign(
             { email: email, name: name, role: 'user' }, 
             process.env.JWT_SECRET || 'chuoi_bi_mat_cua_sep_hido_123456', 
