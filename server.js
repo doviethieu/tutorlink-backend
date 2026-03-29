@@ -33,7 +33,43 @@ mongoose.connect(process.env.MONGODB_URI)
   });
 
 // 4. Mở công tắc server
+// ==========================================
+// TÍCH HỢP SOCKET.IO CHO CHAT REAL-TIME
+// ==========================================
+const http = require('http');
+const { Server } = require('socket.io');
+
+// Tạo một server HTTP bọc lấy thằng app Express hiện tại
+const server = http.createServer(app);
+
+// Khởi tạo trạm phát sóng Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173", // Cấp phép cho Frontend React kết nối
+    methods: ["GET", "POST"]
+  }
+});
+
+// Lắng nghe các kết nối từ người dùng (Frontend)
+io.on('connection', (socket) => {
+  console.log('🟢 Một user vừa kết nối với trạm Chat! ID:', socket.id);
+
+  // Khi có người gửi tin nhắn lên trạm
+  socket.on('send_message', (data) => {
+    // Trạm nhận được tin, lập tức phát sóng lại cho TOÀN BỘ mọi người khác
+    io.emit('receive_message', data);
+  });
+
+  // Khi người dùng tắt web
+  socket.on('disconnect', () => {
+    console.log('🔴 User đã ngắt kết nối ID:', socket.id);
+  });
+});
+
+// ==========================================
+// CHẠY SERVER MỚI (Dùng server.listen thay vì app.listen)
+// ==========================================
 const PORT = 8000;
-app.listen(PORT, () => {
-    console.log(`[SERVER] Backend đang chạy tại: http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Trạm vũ trụ Backend đang chạy tại http://localhost:${PORT}`);
 });

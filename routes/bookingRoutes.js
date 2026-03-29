@@ -38,4 +38,59 @@ router.get('/tutor/:tutorId', async (req, res) => {
   }
 });
 
+// ============================================================
+// Route 3: Cập nhật trạng thái đơn
+// ============================================================
+router.put('/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body; // Lấy chữ "Chấp nhận" hoặc "Từ chối" từ Frontend gửi sang
+    
+    // Tìm cái đơn hàng theo ID và đổi trạng thái của nó
+    const updatedBooking = await Booking.findByIdAndUpdate(
+      req.params.id, 
+      { status: status }, 
+      { new: true } // Trả về cục data mới nhất sau khi sửa
+    );
+
+    if (!updatedBooking) {
+      return res.status(404).json({ message: "Không tìm thấy đơn này trong kho!" });
+    }
+
+    res.status(200).json(updatedBooking);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ============================================================
+// Route 4: Lấy Lịch sử đặt lịch của Học sinh (Theo Email)
+// ============================================================
+router.get('/student/:email', async (req, res) => {
+  try {
+    // Tìm tất cả các đơn mà email này đã đặt, sắp xếp mới nhất lên đầu
+    const lichSu = await Booking.find({ studentEmail: req.params.email }).sort({ createdAt: -1 });
+    res.status(200).json(lichSu);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ============================================================
+// Route 5: Xóa đơn đặt lịch
+// ============================================================
+router.delete('/:id', async (req, res) => {
+  try {
+    // Tìm cái đơn hàng theo ID và xoá nó khỏi Database
+    const deletedBooking = await Booking.findByIdAndDelete(req.params.id);
+
+    if (!deletedBooking) {
+      return res.status(404).json({ message: "Không tìm thấy đơn này, chắc ai đó xóa mất rồi!" });
+    }
+
+    res.status(200).json({ message: "Đã trảm đơn thành công rực rỡ!" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;
