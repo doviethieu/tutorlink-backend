@@ -3,7 +3,7 @@ const router = express.Router();
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs'); 
-const User = require('../models/User'); // Móc vào Két sắt
+const User = require('../models/User'); // Móc vào database
 
 const CLIENT_ID = "896398635150-1oi6n3ueq52s2sn6l0pdqt83a75btbbh.apps.googleusercontent.com";
 const client = new OAuth2Client(CLIENT_ID);
@@ -34,7 +34,7 @@ router.post('/register', async (req, res) => {
             role: 'user' // Mặc định là user thường
         });
 
-        // 4. Nhét vào Két sắt (Database)
+        // 4. Nhét vào Database
         await newUser.save();
 
         res.status(201).json({ message: "Đăng ký thành công rực rỡ!" });
