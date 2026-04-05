@@ -1,75 +1,92 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const http = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
-// 1. Nhập khẩu các bộ phận
+// 1. IMPORT CÁC ĐƯỜNG DẪN (ROUTES) VÀ MODEL
 const authRoutes = require('./routes/authRoutes');
 const tutorRoutes = require('./routes/tutorRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const Message = require('./models/Message'); 
+
 const app = express();
 
-// Cho phép Frontend truy cập
-app.use(cors());
-app.use(express.json());
+// 2. CẤU HÌNH CƠ BẢN CHO SERVER (SỬA LỖI CORS TẠI ĐÂY)
+app.use(cors({
+  origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+  methods: ["GET", "POST", "PUT", "DELETE"], // <--- ĐÃ THÊM PUT VÀ DELETE ĐỂ DUYỆT/XÓA ĐƠN
+  credentials: true
+}));
 
-// 2. Cắm điện cho các đường ray
-// Thêm '/bookings' vào ổ cắm để nó khớp với Frontend
+app.use(express.json()); 
+
+// 3. ĐĂNG KÝ CÁC API TRUYỀN THỐNG
 app.use('/api/bookings', bookingRoutes); 
 app.use('/api/auth', authRoutes); 
 app.use('/api', tutorRoutes);
 
-app.get('/', (req, res) => {
-    res.json({ thong_bao: "Server TutorLink đang chạy mượt mà!" });
-});
-
-// 3. Kết nối Database
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('[DATABASE] Đã kết nối thành công với MongoDB!');
-  })
-  .catch((err) => {
-    console.log('[DATABASE] Lỗi kết nối:', err.message);
-  });
-
-// 4. Mở công tắc server
-// ==========================================
-// TÍCH HỢP SOCKET.IO CHO CHAT REAL-TIME
-// ==========================================
-const http = require('http');
-const { Server } = require('socket.io');
-
-// Tạo một server HTTP bọc lấy thằng app Express hiện tại
-const server = http.createServer(app);
-
-// Khởi tạo trạm phát sóng Socket.io
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:5173", // Cấp phép cho Frontend React kết nối
-    methods: ["GET", "POST"]
+// API lấy lịch sử tin nhắn
+app.get('/api/messages/:room', async (req, res) => {
+  try {
+    const { room } = req.params;
+    const messages = await Message.find({ room }).sort({ createdAt: 1 });
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: "Không thể lấy lịch sử tin nhắn" });
   }
 });
 
-// Lắng nghe các kết nối từ người dùng (Frontend)
-io.on('connection', (socket) => {
-  console.log('🟢 Một user vừa kết nối với trạm Chat! ID:', socket.id);
+app.get('/', (req, res) => {
+    res.json({ status: "Server đang chạy cực tốt, CORS đã được mở khóa!" });
+});
 
-  // Khi có người gửi tin nhắn lên trạm
-  socket.on('send_message', (data) => {
-    // Trạm nhận được tin, lập tức phát sóng lại cho TOÀN BỘ mọi người khác
-    io.emit('receive_message', data);
+// 4. KẾT NỐI VỚI CƠ SỞ DỮ LIỆU MONGODB
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ [DATABASE] Đã kết nối MongoDB thành công!'))
+  .catch((err) => console.log('❌ [DATABASE] Lỗi kết nối:', err.message));
+
+// 5. CẤU HÌNH SOCKET.IO (CŨNG MỞ CORS LUÔN)
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    methods: ["GET", "POST", "PUT", "DELETE"], // <--- ĐỒNG BỘ LUÔN CHO CHẮC
+    credentials: true
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('🟢 Có người vừa online, ID Socket:', socket.id);
+
+  socket.on('join_room', (room) => {
+    socket.join(room);
+    console.log(`🏠 User ${socket.id} đã vào phòng chat: ${room}`);
   });
 
-  // Khi người dùng tắt web
+  socket.on('send_message', async (data) => {
+    console.log("📩 Nhận tin nhắn mới:", data);
+    try {
+      const tinNhanMoi = new Message(data);
+      const savedMsg = await tinNhanMoi.save();
+      io.to(data.room).emit('receive_message', savedMsg);
+      console.log("✅ Đã lưu vào DB và phát tới phòng:", data.room);
+    } catch (error) {
+      console.log("❌ Lỗi xử lý tin nhắn:", error.message);
+    }
+  });
+
   socket.on('disconnect', () => {
-    console.log('🔴 User đã ngắt kết nối ID:', socket.id);
+    console.log('🔴 Một người đã offline:', socket.id);
   });
 });
 
-// ==========================================
-// CHẠY SERVER MỚI (Dùng server.listen thay vì app.listen)
-// ==========================================
+// 6. KHỞI CHẠY TOÀN BỘ HỆ THỐNG
 const PORT = 8000;
 server.listen(PORT, () => {
-  console.log(`🚀 Trạm vũ trụ Backend đang chạy tại http://localhost:${PORT}`);
+  console.log('-----------------------------------------');
+  console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
+  console.log(`🔓 Quyền hạn: GET, POST, PUT, DELETE đã sẵn sàng!`);
+  console.log('-----------------------------------------');
 });

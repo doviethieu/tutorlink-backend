@@ -12,6 +12,24 @@ router.get('/tutors', async (req, res) => {
     }
 });
 
+// ==========================================
+// 1.1. XEM CHI TIẾT 1 GIA SƯ (API MỚI THÊM VÀO ĐÂY)
+// ==========================================
+router.get('/tutors/:id', async (req, res) => {
+    try {
+        const idGiaSu = req.params.id;
+        const giaSu = await Tutor.findById(idGiaSu);
+        
+        if (!giaSu) {
+            return res.status(404).json({ message: "Không tìm thấy hồ sơ gia sư này!" });
+        }
+        
+        res.json(giaSu);
+    } catch (error) {
+        res.status(500).json({ message: "Lỗi khi tìm kiếm gia sư!", error: error.message });
+    }
+});
+
 // 2. THÊM GIA SƯ MỚI (Dành cho người dùng đăng ký làm gia sư)
 router.post('/tutors', async (req, res) => {
     try {
