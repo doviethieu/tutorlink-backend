@@ -1,11 +1,11 @@
+require('dotenv').config(); // LUÔN LUÔN Ở DÒNG 1
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
-require('dotenv').config();
 
-// 1. IMPORT CÁC ĐƯỜNG DẪN (ROUTES) VÀ MODEL
+// 1. IMPORT ROUTES VÀ MODEL
 const authRoutes = require('./routes/authRoutes');
 const tutorRoutes = require('./routes/tutorRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
@@ -13,18 +13,21 @@ const Message = require('./models/Message');
 
 const app = express();
 
-// 2. CẤU HÌNH CƠ BẢN CHO SERVER
+// 2. CẤU HÌNH CƠ BẢN
+// Lấy link frontend từ .env, nếu không có thì mặc định là localhost:5173
+const ALLOWED_ORIGINS = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : ["http://localhost:5173", "http://127.0.0.1:5173"];
+
 app.use(cors({
-  origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+  origin: ALLOWED_ORIGINS,
   methods: ["GET", "POST", "PUT", "DELETE"], 
   credentials: true
 }));
 
 app.use(express.json()); 
 
-// 3. ĐĂNG KÝ CÁC API TRUYỀN THỐNG
-app.use('/api/bookings', bookingRoutes); 
+// 3. ĐĂNG KÝ API
 app.use('/api/auth', authRoutes); 
+app.use('/api/bookings', bookingRoutes); 
 app.use('/api', tutorRoutes);
 
 // API lấy lịch sử tin nhắn
@@ -39,63 +42,65 @@ app.get('/api/messages/:room', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.json({ status: "Server đang chạy cực tốt, CORS đã được mở khóa!" });
+    res.json({ 
+        status: "Online", 
+        message: "TutorLink Server is running perfectly!",
+        timestamp: new Date()
+    });
 });
 
-// 4. KẾT NỐI VỚI CƠ SỞ DỮ LIỆU MONGODB
+// 4. KẾT NỐI DATABASE
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ [DATABASE] Đã kết nối MongoDB thành công!'))
+  .then(() => console.log('✅ [DATABASE] Đã kết nối thành công tới Cluster0'))
   .catch((err) => console.log('❌ [DATABASE] Lỗi kết nối:', err.message));
 
 // 5. CẤU HÌNH SOCKET.IO
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: ALLOWED_ORIGINS,
+    methods: ["GET", "POST"],
     credentials: true
   }
 });
 
-io.on('connection', (socket) => {
-  console.log('🟢 Có người vừa online, ID Socket:', socket.id);
+// Lưu Socket vào app để dùng ở các Controller khác nếu cần (ví dụ: thông báo booking mới)
+app.set('socketio', io); 
 
-  // Tham gia phòng
+io.on('connection', (socket) => {
+  console.log(`🟢 New connection: ${socket.id}`);
+
   socket.on('join_room', (room) => {
     socket.join(room);
-    console.log(`🏠 User ${socket.id} đã vào phòng chat: ${room}`);
+    console.log(`🏠 User ${socket.id} joined room: ${room}`);
   });
 
-  // BỔ SUNG LỆNH RỜI PHÒNG KHI HỌC SINH/GIA SƯ THOÁT TRANG CV
   socket.on('leave_room', (room) => {
     socket.leave(room);
-    console.log(`👋 User ${socket.id} đã dọn dẹp và rời phòng: ${room}`);
+    console.log(`👋 User ${socket.id} left room: ${room}`);
   });
 
-  // Gửi và nhận tin nhắn
   socket.on('send_message', async (data) => {
-    console.log("📩 Nhận tin nhắn mới:", data);
     try {
-      const tinNhanMoi = new Message(data);
-      const savedMsg = await tinNhanMoi.save();
-      // io.to(room) chỉ phát tin vào đúng căn phòng đó
+      const newMessage = new Message(data);
+      const savedMsg = await newMessage.save();
       io.to(data.room).emit('receive_message', savedMsg);
-      console.log("✅ Đã lưu vào DB và phát tới phòng:", data.room);
+      console.log(`📩 Room ${data.room}: New message saved.`);
     } catch (error) {
-      console.log("❌ Lỗi xử lý tin nhắn:", error.message);
+      console.log("❌ Socket Error:", error.message);
     }
   });
 
   socket.on('disconnect', () => {
-    console.log('🔴 Một người đã offline:', socket.id);
+    console.log(`🔴 User disconnected: ${socket.id}`);
   });
 });
 
-// 6. KHỞI CHẠY TOÀN BỘ HỆ THỐNG
-const PORT = 8000;
+// 6. KHỞI CHẠY SERVER
+const PORT = process.env.PORT || 8000; // Ưu tiên PORT từ file .env
 server.listen(PORT, () => {
-  console.log('-----------------------------------------');
-  console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
-  console.log(`🔓 Quyền hạn: GET, POST, PUT, DELETE đã sẵn sàng!`);
-  console.log('-----------------------------------------');
+  console.log('=========================================');
+  console.log(`🚀 SERVER IS RUNNING ON PORT: ${PORT}`);
+  console.log(`🔗 Local: http://localhost:${PORT}`);
+  console.log('=========================================');
 });

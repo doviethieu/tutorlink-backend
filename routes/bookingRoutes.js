@@ -19,6 +19,13 @@ router.post('/', async (req, res) => {
     // Nếu ok thì lưu vào kho
     const newBooking = new Booking({ tutorId, studentName, studentEmail, studentPhone, message });
     await newBooking.save();
+
+    // =======================================================
+    // PHÁT SÓNG SOCKET KHI CÓ ĐƠN MỚI
+    const io = req.app.get('socketio');
+    if (io) io.emit('new_booking', newBooking);
+    // =======================================================
+
     res.status(201).json(newBooking);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -55,6 +62,12 @@ router.put('/:id/status', async (req, res) => {
     if (!updatedBooking) {
       return res.status(404).json({ message: "Không tìm thấy đơn này trong kho!" });
     }
+
+    // =======================================================
+    // PHÁT SÓNG SOCKET KHI TRẠNG THÁI ĐỔI (Chấp nhận/Từ chối)
+    const io = req.app.get('socketio');
+    if (io) io.emit('booking_status_updated', updatedBooking);
+    // =======================================================
 
     res.status(200).json(updatedBooking);
   } catch (error) {
