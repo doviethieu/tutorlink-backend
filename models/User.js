@@ -2,43 +2,45 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    // Tên hiển thị của người dùng (lấy từ form đăng ký hoặc từ Google)
     name: {
       type: String,
       required: true,
     },
-    // Email bắt buộc phải có và duy nhất
     email: {
       type: String,
       required: true,
       unique: true,
     },
-    // Mật khẩu (Không để required: true nữa vì khách đăng nhập Google sẽ không có mật khẩu)
+    // Mật khẩu bắt buộc nếu đăng nhập truyền thống
     password: {
       type: String,
     },
-    // Phân quyền người dùng
     role: {
       type: String,
       enum: ['user', 'admin'],
       default: 'user',
     },
-    // --- CÁC TRƯỜNG MỚI ĐỂ PHỤC VỤ GOOGLE LOGIN --- //
+    // --- CÁC TRƯỜNG PHỤC VỤ 2FA (XÁC THỰC 2 YẾU TỐ) --- //
+    is2FAEnabled: {
+      type: Boolean,
+      default: false, // Mặc định tài khoản mới chưa bật 2FA
+    },
+    twoFactorSecret: {
+      type: String, // Nơi lưu mã bí mật của riêng từng user
+    },
     
-    // ID định danh duy nhất do Google cấp
+    // --- CÁC TRƯỜNG CHO GOOGLE LOGIN (Giữ lại phòng hờ Sếp dùng sau) --- //
     googleId: {
       type: String,
       unique: true,
-      sparse: true, // Quan trọng: Cho phép nhiều người dùng bình thường có googleId = null mà không bị lỗi trùng lặp (duplicate key)
+      sparse: true, 
     },
-    // Link ảnh đại diện (lấy từ avatar Google)
     avatar: {
       type: String,
-      default: 'https://via.placeholder.com/150', // Ảnh mặc định nếu không có
+      default: '', // ĐÃ SỬA: Để trống để Backend tự sinh ảnh chữ cái
     },
   },
   {
-    // Tự động thêm 2 trường: createdAt (ngày tạo) và updatedAt (ngày cập nhật)
     timestamps: true, 
   }
 );
