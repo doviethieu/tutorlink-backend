@@ -6,7 +6,11 @@ const tutorSchema = new mongoose.Schema({
   phone: { type: String },
   subject: { type: String, required: true },
   price: { type: Number, required: true },
-  rating: { type: Number, default: 5.0 },
+  
+  // === CẬP NHẬT ĐỂ ĐỒNG BỘ VỚI TÍNH NĂNG REVIEW ===
+  rating: { type: Number, default: 0 }, 
+  totalReviews: { type: Number, default: 0 },
+  
   image: { type: String },
   isPremium: { type: Boolean, default: false },
   status: { type: String, default: 'Chờ duyệt' },

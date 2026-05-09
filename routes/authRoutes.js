@@ -115,7 +115,12 @@ router.post('/verify-otp', async (req, res) => {
         res.json({ 
             message: "Đăng nhập thành công!", 
             token,
-            user: { name: user.name, email: user.email, role: user.role }
+            user: { 
+                _id: user._id, // <--- ĐÃ THÊM Ở ĐÂY NÀY SẾP
+                name: user.name, 
+                email: user.email, 
+                role: user.role 
+            }
         });
     } catch (error) {
         res.status(500).json({ message: "Lỗi hệ thống xác minh OTP" });
@@ -142,7 +147,13 @@ router.post('/google-login', async (req, res) => {
         res.json({
             message: "Đăng nhập Google thành công!",
             token: jwtToken,
-            user: { name: user.name, email: user.email, picture: user.avatar || picture, role: user.role }
+            user: { 
+                _id: user._id, // <--- ĐÃ THÊM Ở ĐÂY NỮA NÀY SẾP
+                name: user.name, 
+                email: user.email, 
+                picture: user.avatar || picture, 
+                role: user.role 
+            }
         });
     } catch (error) {
         console.error("🔴 Lỗi xác thực Google:", error);
