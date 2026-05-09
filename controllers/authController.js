@@ -118,6 +118,7 @@ router.post('/verify-otp', async (req, res) => {
             message: "Đăng nhập thành công!", 
             token, 
             user: { 
+                _id: user._id,  // <--- ĐÃ SỬA: THÊM ID Ở ĐÂY
                 name: user.name, 
                 email: user.email, 
                 role: user.role,
@@ -151,7 +152,13 @@ router.post('/google-login', async (req, res) => {
         res.json({
             message: "Đăng nhập Google thành công!",
             token: jwtToken,
-            user: { name: user.name, email: user.email, picture: user.avatar || picture, role: user.role }
+            user: { 
+                _id: user._id, // <--- ĐÃ SỬA: THÊM ID Ở ĐÂY NỮA
+                name: user.name, 
+                email: user.email, 
+                picture: user.avatar || picture, 
+                role: user.role 
+            }
         });
     } catch (error) {
         console.error("🔴 Google Login Error:", error);
