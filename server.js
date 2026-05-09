@@ -14,7 +14,6 @@ const Message = require('./models/Message');
 const app = express();
 
 // 2. CẤU HÌNH CƠ BẢN
-// Lấy link frontend từ .env, nếu không có thì mặc định là localhost:5173
 const ALLOWED_ORIGINS = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : ["http://localhost:5173", "http://127.0.0.1:5173"];
 
 app.use(cors({
@@ -29,6 +28,10 @@ app.use(express.json());
 app.use('/api/auth', authRoutes); 
 app.use('/api/bookings', bookingRoutes); 
 app.use('/api', tutorRoutes);
+
+// <-- THÊM 2 DÒNG NÀY ĐỂ KÍCH HOẠT API REVIEW VÀ ADMIN -->
+app.use('/api/reviews', require('./routes/reviewRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // API lấy lịch sử tin nhắn
 app.get('/api/messages/:room', async (req, res) => {
@@ -64,7 +67,6 @@ const io = new Server(server, {
   }
 });
 
-// Lưu Socket vào app để dùng ở các Controller khác nếu cần (ví dụ: thông báo booking mới)
 app.set('socketio', io); 
 
 io.on('connection', (socket) => {
@@ -97,7 +99,7 @@ io.on('connection', (socket) => {
 });
 
 // 6. KHỞI CHẠY SERVER
-const PORT = process.env.PORT || 8000; // Ưu tiên PORT từ file .env
+const PORT = process.env.PORT || 8000; 
 server.listen(PORT, () => {
   console.log('=========================================');
   console.log(`🚀 SERVER IS RUNNING ON PORT: ${PORT}`);
