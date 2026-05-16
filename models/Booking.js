@@ -6,6 +6,10 @@ const bookingSchema = new mongoose.Schema({
   studentEmail: { type: String, required: true }, // DÒNG NÀY (Để lưu Email)
   studentPhone: { type: String, required: true }, // Số điện thoại để gia sư gọi
   message: { type: String }, // Lời nhắn (VD: Em muốn học tối thứ 3)
+  
+  // 🚀 TRƯỜNG NÀY ĐỂ NHẬN DỮ LIỆU LỊCH TỪ FRONTEND
+  selectedSchedule: { type: [String], default: [] }, 
+
   status: { type: String, default: 'Chờ xác nhận' } // Trạng thái đơn
 }, { timestamps: true });
 
