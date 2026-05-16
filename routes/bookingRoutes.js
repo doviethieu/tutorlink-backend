@@ -7,7 +7,8 @@ const Booking = require('../models/Booking');
 // ============================================================
 router.post('/', async (req, res) => {
   try {
-    const { tutorId, studentName, studentEmail, studentPhone, message } = req.body;
+    // LẤY THÊM selectedSchedule TỪ FRONTEND GỬI LÊN
+    const { tutorId, studentName, studentEmail, studentPhone, message, selectedSchedule } = req.body;
 
     // CHẶN SPAM: Soi bằng Email thay vì soi Tên
     const daDatLich = await Booking.findOne({ tutorId: tutorId, studentEmail: studentEmail });
@@ -16,8 +17,8 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ message: "Bạn đã đặt lịch với gia sư này rồi, chờ phản hồi nha!" });
     }
 
-    // Nếu ok thì lưu vào kho
-    const newBooking = new Booking({ tutorId, studentName, studentEmail, studentPhone, message });
+    // Nếu ok thì lưu vào kho (ĐÃ NHÉT THÊM selectedSchedule VÀO ĐÂY)
+    const newBooking = new Booking({ tutorId, studentName, studentEmail, studentPhone, message, selectedSchedule });
     await newBooking.save();
 
     // =======================================================
