@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const authRoutes = require('./routes/authRoutes');
 const tutorRoutes = require('./routes/tutorRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const supportRoutes = require('./routes/supportRoutes'); // 🔥 THÊM ĐỒNG BỘ ROUTE TRỢ GIÚP MỚI VÀO ĐÂY
 const Message = require('./models/Message'); 
 
 const app = express();
@@ -27,6 +28,7 @@ app.use(express.json());
 // 3. ĐĂNG KÝ API
 app.use('/api/auth', authRoutes); 
 app.use('/api/bookings', bookingRoutes); 
+app.use('/api/support', supportRoutes); // 🔥 KÍCH HOẠT ĐƯỜNG TRUYỀN HỖ TRỢ CHO HỌC SINH / GIA SƯ
 app.use('/api', tutorRoutes);
 
 // <-- THÊM 2 DÒNG NÀY ĐỂ KÍCH HOẠT API REVIEW VÀ ADMIN -->
