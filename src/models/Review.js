@@ -36,12 +36,12 @@ const reviewSchema = new mongoose.Schema({
 
   // === CÁC TRƯỜNG QUẢN LÝ CỦA ADMIN ===
   hidden_at: { type: Date, default: null },          // Thời gian Admin ẩn đơn (Nếu null = Hiện công khai)
-  hidden_reason: { type: String, default: null }     // Lý do Admin ẩn (Ví dụ: "Spam", "Xúc phạm")
+  hidden_reason: { type: String, default: null },     // Lý do Admin ẩn (Ví dụ: "Spam", "Xúc phạm")
+  hiddenBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
 
 }, { timestamps: true });
 
 // Giữ nguyên chỉ mục Index thần tốc của sếp để lọc các đánh giá không bị ẩn khi xem hồ sơ gia sư
 reviewSchema.index({ tutorId: 1, hidden_at: 1 });
-reviewSchema.index({ bookingId: 1 }); // Thêm index đơn để tối ưu kiểm tra unique nhanh hơn
 
 module.exports = mongoose.model('Review', reviewSchema);
