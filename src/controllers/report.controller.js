@@ -1,66 +1,113 @@
-const Support = require('../models/Support');
-const mongoose = require('mongoose'); // 🔥 ĐÃ THÊM: Để bọc và kiểm tra định dạng ObjectId an toàn
+const mongoose = require('mongoose');
+const Report = require('../models/Report');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
+const { ok, fail } = require('../utils/apiResponse');
 
-// ============================================================
-// 1. NGƯỜI DÙNG GỬI YÊU CẦU HỖ TRỢ / TỐ CÁO (Bảo mật bằng Token)
-// ============================================================
-exports.createSupportTicket = async (req, res) => {
+const roleLabels = {
+  student: 'Học viên',
+  tutor: 'Gia sư',
+  admin: 'Khách',
+};
+
+function cleanText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function formatReport(report) {
+  const obj = typeof report.toObject === 'function' ? report.toObject() : report;
+  const body = obj.body || obj.message || '';
+
+  return {
+    ...obj,
+    id: obj._id?.toString?.() || obj.id,
+    title: obj.title || obj.topic || 'Yêu cầu hỗ trợ',
+    topic: obj.topic || obj.title || 'Yêu cầu hỗ trợ',
+    body,
+    message: obj.message || obj.body || '',
+    description: body,
+    submittedAt: obj.submitted || obj.createdAt,
+  };
+}
+
+async function notifyAdmins(report) {
+  const admins = await User.find({ role: 'admin', deletedAt: null, isActive: true }).select('_id');
+  if (!admins.length) return;
+
+  await Notification.insertMany(
+    admins.map((admin) => ({
+      userId: admin._id,
+      type: 'system',
+      title: 'Có yêu cầu hỗ trợ mới',
+      message: `${report.name || 'Người dùng'} vừa gửi ticket: ${report.title}`,
+      payload: { reportId: report._id },
+    })),
+    { ordered: false }
+  );
+}
+
+exports.createReport = async (req, res) => {
   try {
-    const { title, body, targetId } = req.body; 
-    
-    // 🛠️ ĐÃ GIA CỐ 1: Kiểm tra an toàn xem Token đã giải mã thành công qua middleware protect chưa
-    if (!req.user || !req.user.id) {
-        return res.status(401).json({ status: 'error', message: "Tài khoản chưa được xác thực, thiếu thông tin ID người gửi!" });
-    }
-    const senderId = req.user.id; 
+    const title = cleanText(req.body.title || req.body.topic);
+    const body = cleanText(req.body.body || req.body.message);
 
-    // Kiểm tra dữ liệu bắt buộc đầu vào
     if (!title || !body) {
-      return res.status(400).json({ status: 'error', message: "Vui lòng điền đầy đủ tiêu đề và nội dung khiếu nại!" });
+      return fail(res, 400, 'VALIDATION_ERROR', 'Vui lòng nhập chủ đề và nội dung yêu cầu');
     }
 
-    // 🛠️ ĐÃ GIA CỐ 2: Xử lý triệt để chuỗi rỗng "" hoặc ID sai định dạng truyền từ Frontend để chặn đứng lỗi sập CastError 500
-    let cleanTargetId = null;
-    if (targetId && targetId.trim() !== "") {
-        if (mongoose.Types.ObjectId.isValid(targetId)) {
-            cleanTargetId = targetId;
-        } else {
-            return res.status(400).json({ status: 'error', message: "Mã đối tượng bị tố cáo (targetId) không đúng định dạng hệ thống!" });
-        }
+    let targetId = null;
+    const rawTargetId = cleanText(req.body.targetId);
+    if (rawTargetId) {
+      if (!mongoose.Types.ObjectId.isValid(rawTargetId)) {
+        return fail(res, 400, 'INVALID_TARGET_ID', 'Mã đối tượng báo cáo không hợp lệ');
+      }
+      targetId = rawTargetId;
     }
 
-    // Khởi tạo đơn với cấu trúc trường tiếng Anh khớp 100% database schema
-    const newSupport = new Support({ 
-      senderId, 
-      targetId: cleanTargetId, // Được chuẩn hóa thành ObjectId chuẩn hoặc null an toàn
-      title, 
+    const report = await Report.create({
+      userId: req.user._id,
+      senderId: req.user._id,
+      name: cleanText(req.body.name) || req.user.name || 'Thành viên hệ thống',
+      email: cleanText(req.body.email) || req.user.email || '',
+      role: roleLabels[req.user.role] || 'Khách',
+      title,
+      topic: title,
       body,
-      status: 'open' 
+      message: body,
+      type: cleanText(req.body.type) || 'Support',
+      target: cleanText(req.body.target) || title,
+      targetId,
+      severity: ['Low', 'Medium', 'High'].includes(req.body.severity) ? req.body.severity : 'Medium',
+      status: 'open',
     });
-    
-    await newSupport.save();
 
-    // Phát tín hiệu Realtime báo về màn hình Dashboard của Admin lập tức (Bọc try...catch an toàn)
     try {
-        const io = req.app.get('socketio');
-        if (io) io.emit('new_support_ticket', newSupport);
-    } catch (socketErr) {
-        console.warn("⚠️ Không thể phát sự kiện socket realtime báo cho Admin:", socketErr.message);
+      await notifyAdmins(report);
+      const io = req.app.get('socketio');
+      if (io) {
+        io.emit('new_report', report);
+        io.emit('new_support_ticket', report);
+      }
+    } catch (notifyError) {
+      console.warn('Không thể gửi thông báo report mới:', notifyError.message);
     }
 
-    return res.status(201).json({ 
-      status: 'success', 
-      message: "Gửi yêu cầu hỗ trợ/tố cáo thành công! Ban quản trị đã ghi nhận hệ thống.",
-      data: newSupport
-    });
+    return ok(res, formatReport(report), { message: 'Gửi yêu cầu hỗ trợ thành công' }, 201);
   } catch (error) {
-    // Log lỗi chi tiết lên Terminal Backend để sếp dễ theo dõi thực tế
-    console.error("🔴 LỖI CRASH HỆ THỐNG TẠI CREATE SUPPORT TICKET:", error);
-
-    return res.status(500).json({ 
-        status: 'error', 
-        message: "Lỗi hệ thống nội bộ khi gửi yêu cầu hỗ trợ!", 
-        error: error.message 
-    });
+    return fail(res, 500, 'REPORT_CREATE_FAILED', 'Không thể gửi yêu cầu hỗ trợ', error.message);
   }
 };
+
+exports.listMyReports = async (req, res) => {
+  try {
+    const reports = await Report.find({
+      $or: [{ userId: req.user._id }, { senderId: req.user._id }],
+    }).sort({ submitted: -1 });
+
+    return ok(res, reports.map(formatReport));
+  } catch (error) {
+    return fail(res, 500, 'REPORT_LIST_FAILED', 'Không thể tải danh sách yêu cầu hỗ trợ', error.message);
+  }
+};
+
+exports.createSupportTicket = exports.createReport;
