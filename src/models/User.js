@@ -53,6 +53,11 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   { timestamps: true },
 );
@@ -67,6 +72,7 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     phone: this.phone,
     isActive: this.isActive,
     emailVerified: this.emailVerified,
+    walletBalance: this.walletBalance || 0,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };

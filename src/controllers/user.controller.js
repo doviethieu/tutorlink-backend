@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const WalletTransaction = require('../models/WalletTransaction');
 const asyncHandler = require('../utils/asyncHandler');
 const { ok, fail } = require('../utils/apiResponse');
 
@@ -51,9 +52,52 @@ const deleteMe = asyncHandler(async (req, res) => {
   return ok(res, { message: 'Tài khoản đã được xóa mềm' });
 });
 
+const getWallet = asyncHandler(async (req, res) => {
+  const transactions = await WalletTransaction.find({ userId: req.user._id })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  return ok(res, {
+    balance: req.user.walletBalance || 0,
+    transactions: transactions.map((tx) => ({
+      ...tx,
+      id: tx._id,
+      date: tx.createdAt?.toISOString?.().slice(0, 10),
+    })),
+  });
+});
+
+const depositWallet = asyncHandler(async (req, res) => {
+  const amount = Number(req.body.amount);
+  if (!amount || amount <= 0) {
+    return fail(res, 400, 'VALIDATION_ERROR', 'Số tiền nạp phải lớn hơn 0');
+  }
+
+  req.user.walletBalance = Number(req.user.walletBalance || 0) + amount;
+  await req.user.save();
+
+  const transaction = await WalletTransaction.create({
+    userId: req.user._id,
+    type: 'deposit',
+    amount,
+    balanceAfter: req.user.walletBalance,
+    description: 'Nạp tiền vào ví TutorLink',
+    referenceType: 'User',
+    referenceId: req.user._id,
+  });
+
+  return ok(res, {
+    balance: req.user.walletBalance,
+    transaction,
+  }, undefined, 201);
+});
+
 module.exports = {
   getMe,
   updateMe,
   changePassword,
   deleteMe,
+  getWallet,
+  depositWallet,
 };
