@@ -16,6 +16,8 @@ router.get('/room/:roomId', chatController.getChatHistory);
 
 // Phương án 2: Dự phòng trùng lặp từ khóa cho form cũ của sếp (Nếu sếp mount root là /api ở file server.js)
 router.get('/chat/room/:roomId', chatController.getChatHistory);
+router.get('/messages/:roomId', chatController.getChatHistory);
+router.post('/messages', chatController.sendMessage);
 
 // ============================================================
 // 2. API: LẤY DANH SÁCH PHÒNG CHAT HIỆN TẠI CỦA USER
