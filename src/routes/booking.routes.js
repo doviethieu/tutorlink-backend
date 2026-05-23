@@ -12,7 +12,7 @@ router.get('/export-csv', bookingController.exportCsv);
 
 router.route('/')
   .get(bookingController.getBookings)
-  .post(restrictTo('student', 'admin'), bookingController.createBooking);
+  .post(restrictTo('student', 'tutor', 'admin'), bookingController.createBooking);
 
 router.get('/:id', bookingController.getBookingById);
 

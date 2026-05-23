@@ -188,7 +188,11 @@ const exportCsv = asyncHandler(async (req, res) => {
 async function buildUserBookingQuery(user, requestedRole) {
   if (user.role === 'admin' && !requestedRole) return {};
 
-  if (requestedRole === 'tutor' || user.role === 'tutor') {
+  if (requestedRole === 'student') {
+    return { studentId: user._id };
+  }
+
+  if (requestedRole === 'tutor' || (user.role === 'tutor' && !requestedRole)) {
     const tutor = await Tutor.findOne({ userId: user._id }).select('_id');
     return tutor ? { tutorId: tutor._id } : { tutorUserId: user._id };
   }

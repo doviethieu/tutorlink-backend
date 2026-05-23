@@ -8,6 +8,7 @@ const Report = require('../models/Report');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const SystemConfig = require('../models/SystemConfig');
+const WalletTransaction = require('../models/WalletTransaction');
 const asyncHandler = require('../utils/asyncHandler');
 const { ok, fail } = require('../utils/apiResponse');
 const { audit } = require('../services/audit.service');
@@ -303,6 +304,7 @@ const payouts = asyncHandler(async (req, res) => {
     Payout.find(query)
       .populate('tutorId', 'fullName full_name email')
       .populate('tutorUserId', 'fullName email')
+      .populate('requesterId', 'fullName email role walletBalance')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -332,24 +334,55 @@ const updatePayout = asyncHandler(async (req, res) => {
   await payout.save();
 
   if (nextStatus === 'paid') {
-    const paymentRows = await Payment.find({ _id: { $in: payout.paymentIds } }).select('bookingId');
-    const bookingIds = paymentRows.map((payment) => payment.bookingId);
+    if (payout.source === 'wallet_refund') {
+      const walletUser = await User.findById(payout.requesterId).select('walletBalance');
+      await WalletTransaction.create({
+        userId: payout.requesterId,
+        type: 'withdrawal_paid',
+        amount: 0,
+        balanceAfter: walletUser?.walletBalance || 0,
+        description: 'Admin đã xác nhận chuyển khoản rút tiền từ ví',
+        referenceType: 'Payout',
+        referenceId: payout._id,
+      });
+    } else {
+      const paymentRows = await Payment.find({ _id: { $in: payout.paymentIds } }).select('bookingId');
+      const bookingIds = paymentRows.map((payment) => payment.bookingId);
 
-    await Promise.all([
-      Payment.updateMany(
-        { _id: { $in: payout.paymentIds }, escrowStatus: 'held' },
-        { escrowStatus: 'released', releasedAt: payout.processedAt },
-      ),
-      Booking.updateMany(
-        { _id: { $in: bookingIds }, escrowStatus: 'held' },
-        { escrowStatus: 'released' },
-      ),
-    ]);
+      await Promise.all([
+        Payment.updateMany(
+          { _id: { $in: payout.paymentIds }, escrowStatus: 'held' },
+          { escrowStatus: 'released', releasedAt: payout.processedAt },
+        ),
+        Booking.updateMany(
+          { _id: { $in: bookingIds }, escrowStatus: 'held' },
+          { escrowStatus: 'released' },
+        ),
+      ]);
+    }
+  }
+
+  if (nextStatus === 'rejected' && payout.source === 'wallet_refund' && payout.requesterId) {
+    const walletUser = await User.findById(payout.requesterId);
+    if (walletUser) {
+      walletUser.walletBalance = Number(walletUser.walletBalance || 0) + Number(payout.amount || 0);
+      await walletUser.save();
+
+      await WalletTransaction.create({
+        userId: walletUser._id,
+        type: 'withdrawal_rejected',
+        amount: payout.amount,
+        balanceAfter: walletUser.walletBalance,
+        description: 'Admin từ chối rút tiền, số tiền đã hoàn lại ví',
+        referenceType: 'Payout',
+        referenceId: payout._id,
+      });
+    }
   }
 
   await Promise.all([
     Notification.create({
-      userId: payout.tutorUserId,
+      userId: payout.requesterId || payout.tutorUserId,
       type: 'payout_updated',
       title: 'Cập nhật yêu cầu rút tiền',
       body: `Yêu cầu rút tiền đã chuyển sang trạng thái ${nextStatus}`,

@@ -2,11 +2,11 @@
   "name": "tutorlink-backend",
   "version": "1.0.0",
   "description": "",
-  "main": "src/server.js",
+  "main": "server.js",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
-    "check": "node --check src/server.js",
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "check": "node --check server.js",
     "seed:demo": "node scripts/seed-demo.js",
     "test": "echo \"No automated tests configured yet\""
   },
