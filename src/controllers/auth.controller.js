@@ -14,7 +14,7 @@ const {
   revokeRefreshToken,
   blacklistAccessToken,
 } = require('../services/token.service');
-const { getGoogleUser } = require('../services/googleOAuth.service');
+const { getGoogleUserFromToken } = require('../services/googleOAuth.service');
 
 function isValidRole(role) {
   return ['student', 'tutor'].includes(role);
@@ -127,7 +127,17 @@ const googleLogin = asyncHandler(async (req, res) => {
     return fail(res, 400, 'VALIDATION_ERROR', 'Thiếu Google access token');
   }
 
-  const googleUser = await getGoogleUser(token);
+  let googleUser;
+  try {
+    googleUser = await getGoogleUserFromToken(token);
+  } catch (error) {
+    const message = error.message === 'GOOGLE_AUDIENCE_MISMATCH'
+      ? 'Google Client ID của frontend và backend không khớp'
+      : error.message === 'GOOGLE_TOKEN_EXPIRED'
+        ? 'Token Google đã hết hạn, vui lòng đăng nhập lại'
+        : 'Token Google không hợp lệ hoặc đã hết hạn';
+    return fail(res, 401, 'GOOGLE_AUTH_ERROR', message);
+  }
   if (!googleUser.email) {
     return fail(res, 400, 'GOOGLE_AUTH_ERROR', 'Không lấy được email từ Google');
   }

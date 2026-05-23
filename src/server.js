@@ -6,15 +6,20 @@ const configureSocket = require('./config/socket');
 const { startSchedulers } = require('./services/scheduler.service');
 
 async function bootstrap() {
-  await connectDB();
-
   const server = http.createServer(app);
   configureSocket(server, app);
-  startSchedulers();
 
   server.listen(env.port, () => {
     console.log(`[server] TutorLink API running at http://localhost:${env.port}`);
   });
+
+  try {
+    await connectDB();
+    startSchedulers();
+  } catch (error) {
+    console.error('[database] failed to connect', error.message);
+    console.error('[database] server is still running, but DB-backed APIs will fail until MongoDB is reachable');
+  }
 }
 
 bootstrap().catch((error) => {

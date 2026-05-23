@@ -206,8 +206,15 @@ const refundPayment = asyncHandler(async (req, res) => {
 
 const listPayments = asyncHandler(async (req, res) => {
   const query = {};
-  if (req.user.role === 'student') query.studentId = req.user._id;
-  if (req.user.role === 'tutor') query.tutorUserId = req.user._id;
+  if (req.query.role === 'student') {
+    query.studentId = req.user._id;
+  } else if (req.query.role === 'tutor') {
+    query.tutorUserId = req.user._id;
+  } else if (req.user.role === 'student') {
+    query.studentId = req.user._id;
+  } else if (req.user.role === 'tutor') {
+    query.$or = [{ tutorUserId: req.user._id }, { studentId: req.user._id }];
+  }
   if (req.query.bookingId && mongoose.Types.ObjectId.isValid(req.query.bookingId)) {
     query.bookingId = req.query.bookingId;
   }

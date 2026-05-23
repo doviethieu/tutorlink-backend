@@ -8,8 +8,8 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/', paymentController.listPayments);
-router.post('/', restrictTo('student', 'admin'), paymentController.createPayment);
-router.post('/confirm', restrictTo('student', 'admin'), paymentController.confirmPayment);
-router.post('/refund', restrictTo('student', 'admin'), paymentController.refundPayment);
+router.post('/', restrictTo('student', 'tutor', 'admin'), paymentController.createPayment);
+router.post('/confirm', restrictTo('student', 'tutor', 'admin'), paymentController.confirmPayment);
+router.post('/refund', restrictTo('student', 'tutor', 'admin'), paymentController.refundPayment);
 
 module.exports = router;
