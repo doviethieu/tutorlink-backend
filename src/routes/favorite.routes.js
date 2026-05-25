@@ -7,8 +7,8 @@ const router = express.Router();
 
 router.use(protect);
 
-router.get('/favorites', restrictTo('student', 'tutor', 'admin'), favoriteController.listFavorites);
-router.post('/favorites/:tutorId', restrictTo('student', 'tutor', 'admin'), favoriteController.addFavorite);
-router.delete('/favorites/:tutorId', restrictTo('student', 'tutor', 'admin'), favoriteController.removeFavorite);
+router.get('/', restrictTo('student', 'tutor', 'admin'), favoriteController.listFavorites);
+router.post('/:tutorId', restrictTo('student', 'tutor', 'admin'), favoriteController.addFavorite);
+router.delete('/:tutorId', restrictTo('student', 'tutor', 'admin'), favoriteController.removeFavorite);
 
 module.exports = router;
