@@ -10,6 +10,9 @@
     "seed:demo": "node scripts/seed-demo.js",
     "test": "echo \"No automated tests configured yet\""
   },
+  "engines": {
+    "node": ">=20 <25"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -24,7 +27,7 @@
     "express": "^5.2.1",
     "google-auth-library": "^10.6.2",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.3.0",
+    "mongoose": "^8.19.4",
     "nodemailer": "^8.0.5",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
