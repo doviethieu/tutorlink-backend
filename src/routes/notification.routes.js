@@ -6,8 +6,8 @@ const router = express.Router();
 
 router.use(protect);
 
-router.get('/notifications', notificationController.listNotifications);
-router.patch('/notifications/read-all', notificationController.markAllRead);
-router.patch('/notifications/:id/read', notificationController.markRead);
+router.get('/', notificationController.listNotifications);
+router.patch('/read-all', notificationController.markAllRead);
+router.patch('/:id/read', notificationController.markRead);
 
 module.exports = router;
