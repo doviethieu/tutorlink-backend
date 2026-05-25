@@ -1,14 +1,8 @@
 const axios = require('axios');
+const { OAuth2Client } = require('google-auth-library');
 const env = require('../config/env');
 
-function decodeJwtPayload(token) {
-  const parts = String(token || '').split('.');
-  if (parts.length !== 3) return null;
-
-  const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-  const json = Buffer.from(payload, 'base64').toString('utf8');
-  return JSON.parse(json);
-}
+const googleClient = new OAuth2Client(env.googleClientId);
 
 function normalizePayload(payload) {
   if (!payload) return null;
@@ -22,20 +16,26 @@ function normalizePayload(payload) {
 }
 
 async function getGoogleUserFromIdToken(idToken) {
-  const payload = decodeJwtPayload(idToken);
-  if (!payload) {
+  if (!env.googleClientId) {
+    throw new Error('GOOGLE_CLIENT_ID_MISSING');
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: env.googleClientId,
+    });
+    return normalizePayload(ticket.getPayload());
+  } catch (error) {
+    const message = String(error.message || '');
+    if (message.includes('Wrong recipient') || message.includes('audience')) {
+      throw new Error('GOOGLE_AUDIENCE_MISMATCH');
+    }
+    if (message.includes('Token used too late') || message.includes('expired')) {
+      throw new Error('GOOGLE_TOKEN_EXPIRED');
+    }
     throw new Error('GOOGLE_TOKEN_INVALID');
   }
-
-  if (payload.aud !== env.googleClientId) {
-    throw new Error('GOOGLE_AUDIENCE_MISMATCH');
-  }
-
-  if (payload.exp && payload.exp * 1000 < Date.now()) {
-    throw new Error('GOOGLE_TOKEN_EXPIRED');
-  }
-
-  return normalizePayload(payload);
 }
 
 async function getGoogleUser(accessToken) {
@@ -47,11 +47,12 @@ async function getGoogleUser(accessToken) {
 }
 
 async function getGoogleUserFromToken(token) {
-  try {
-    return await getGoogleUserFromIdToken(token);
-  } catch (idTokenError) {
-    return getGoogleUser(token);
+  const looksLikeJwt = String(token || '').split('.').length === 3;
+  if (looksLikeJwt) {
+    return getGoogleUserFromIdToken(token);
   }
+
+  return getGoogleUser(token);
 }
 
 module.exports = { getGoogleUser, getGoogleUserFromToken };
