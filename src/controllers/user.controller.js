@@ -68,36 +68,10 @@ const getWallet = asyncHandler(async (req, res) => {
   });
 });
 
-const depositWallet = asyncHandler(async (req, res) => {
-  const amount = Number(req.body.amount);
-  if (!amount || amount <= 0) {
-    return fail(res, 400, 'VALIDATION_ERROR', 'Số tiền nạp phải lớn hơn 0');
-  }
-
-  req.user.walletBalance = Number(req.user.walletBalance || 0) + amount;
-  await req.user.save();
-
-  const transaction = await WalletTransaction.create({
-    userId: req.user._id,
-    type: 'deposit',
-    amount,
-    balanceAfter: req.user.walletBalance,
-    description: 'Nạp tiền vào ví TutorLink',
-    referenceType: 'User',
-    referenceId: req.user._id,
-  });
-
-  return ok(res, {
-    balance: req.user.walletBalance,
-    transaction,
-  }, undefined, 201);
-});
-
 module.exports = {
   getMe,
   updateMe,
   changePassword,
   deleteMe,
   getWallet,
-  depositWallet,
 };
