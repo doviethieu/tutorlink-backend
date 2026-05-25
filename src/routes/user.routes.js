@@ -13,6 +13,5 @@ router.route('/me')
 
 router.patch('/me/password', userController.changePassword);
 router.get('/me/wallet', userController.getWallet);
-router.post('/me/wallet/deposit', userController.depositWallet);
 
 module.exports = router;
