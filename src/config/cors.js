@@ -2,11 +2,12 @@ const env = require('./env');
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || env.allowedOrigins.includes(origin)) {
-      return callback(null, true);
+    if (!origin || env.corsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
     }
 
-    return callback(new Error(`CORS blocked origin: ${origin}`));
+    callback(new Error(`CORS blocked origin: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
