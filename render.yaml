@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: tutorlink-backend
+    runtime: node
+    plan: free
+    branch: develop
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ACCESS_TOKEN_TTL
+        value: 15m
+      - key: REFRESH_TOKEN_TTL
+        value: 7d
+      - key: FRONTEND_URL
+        value: https://tutorlink-frontend-lac.vercel.app
+      - key: CORS_ORIGINS
+        value: https://tutorlink-frontend-lac.vercel.app,http://localhost:5173
+      - key: GOOGLE_CLIENT_ID
+        value: 896398635150-1oi6n3ueq52s2sn6l0pdqt83a75btbbh.apps.googleusercontent.com

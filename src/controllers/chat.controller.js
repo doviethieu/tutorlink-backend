@@ -1,4 +1,5 @@
 const Message = require('../models/Message');
+const Booking = require('../models/Booking');
 const asyncHandler = require('../utils/asyncHandler');
 const { ok, fail } = require('../utils/apiResponse');
 
@@ -39,6 +40,33 @@ const getChatHistory = asyncHandler(async (req, res) => {
   return ok(res, messages.map(formatMessage));
 });
 
+function buildRoomFromBooking(booking, currentUserId) {
+  const obj = typeof booking.toObject === 'function' ? booking.toObject() : booking;
+  const isTutor = String(obj.tutorUserId?._id || obj.tutorUserId) === String(currentUserId);
+  const partner = isTutor ? obj.studentId : obj.tutorUserId;
+  const partnerName = partner?.fullName || (isTutor ? obj.studentName : obj.tutorId?.fullName) || (isTutor ? 'Học viên' : 'Gia sư');
+
+  return {
+    id: `booking-${obj._id}`,
+    roomId: `booking-${obj._id}`,
+    bookingId: obj._id,
+    name: partnerName,
+    partner: {
+      _id: partner?._id || partner || '',
+      name: partnerName,
+      email: partner?.email || (isTutor ? obj.studentEmail : obj.tutorId?.email) || '',
+      avatarUrl: partner?.avatarUrl || obj.tutorId?.avatarUrl || '',
+      role: isTutor ? 'student' : 'tutor',
+    },
+    subject: obj.subject || 'Buổi học',
+    status: obj.status,
+    date: obj.date,
+    startTime: obj.startTime,
+    meetingUrl: obj.meetingUrl || `/room/booking-${obj._id}`,
+    lastMessage: 'Trao đổi trước và sau buổi học tại phòng chat này.',
+  };
+}
+
 const sendMessage = asyncHandler(async (req, res) => {
   const roomId = req.body.roomId || req.body.room;
   const content = String(req.body.content || req.body.noiDung || '').trim();
@@ -63,14 +91,37 @@ const sendMessage = asyncHandler(async (req, res) => {
 });
 
 const getUserRooms = asyncHandler(async (req, res) => {
-  const rooms = await Message.aggregate([
-    { $match: { senderId: req.user._id } },
-    { $sort: { createdAt: -1 } },
-    { $group: { _id: '$roomId', lastMessageAt: { $first: '$createdAt' } } },
-    { $sort: { lastMessageAt: -1 } },
-  ]);
+  const bookings = await Booking.find({
+    status: 'confirmed',
+    $or: [
+      { studentId: req.user._id },
+      { tutorUserId: req.user._id },
+    ],
+  })
+    .populate('studentId', 'fullName email avatarUrl')
+    .populate('tutorUserId', 'fullName email avatarUrl')
+    .populate('tutorId', 'fullName headline avatarUrl email')
+    .sort({ updatedAt: -1 })
+    .limit(100);
 
-  return ok(res, rooms.map((room) => ({ roomId: room._id, lastMessageAt: room.lastMessageAt })));
+  const rooms = bookings.map((booking) => buildRoomFromBooking(booking, req.user._id));
+  const lastMessages = await Message.find({ roomId: { $in: rooms.map((room) => room.roomId) } })
+    .sort({ createdAt: -1 })
+    .populate('senderId', 'fullName avatarUrl email')
+    .lean();
+
+  const lastMessageByRoom = new Map();
+  for (const message of lastMessages) {
+    if (!lastMessageByRoom.has(message.roomId)) {
+      lastMessageByRoom.set(message.roomId, formatMessage(message));
+    }
+  }
+
+  return ok(res, rooms.map((room) => ({
+    ...room,
+    lastMessage: lastMessageByRoom.get(room.roomId)?.content || room.lastMessage,
+    lastMessageAt: lastMessageByRoom.get(room.roomId)?.createdAt || null,
+  })));
 });
 
 module.exports = {
