@@ -334,14 +334,16 @@ const updatePayout = asyncHandler(async (req, res) => {
   await payout.save();
 
   if (nextStatus === 'paid') {
-    if (payout.source === 'wallet_refund') {
+    if (['wallet_refund', 'wallet_earning'].includes(payout.source)) {
       const walletUser = await User.findById(payout.requesterId).select('walletBalance');
       await WalletTransaction.create({
         userId: payout.requesterId,
         type: 'withdrawal_paid',
         amount: 0,
         balanceAfter: walletUser?.walletBalance || 0,
-        description: 'Admin đã xác nhận chuyển khoản rút tiền từ ví',
+        description: payout.source === 'wallet_earning'
+          ? 'Admin đã xác nhận chuyển khoản rút doanh thu gia sư'
+          : 'Admin đã xác nhận chuyển khoản rút tiền từ ví',
         referenceType: 'Payout',
         referenceId: payout._id,
       });
@@ -362,7 +364,7 @@ const updatePayout = asyncHandler(async (req, res) => {
     }
   }
 
-  if (nextStatus === 'rejected' && payout.source === 'wallet_refund' && payout.requesterId) {
+  if (nextStatus === 'rejected' && ['wallet_refund', 'wallet_earning'].includes(payout.source) && payout.requesterId) {
     const walletUser = await User.findById(payout.requesterId);
     if (walletUser) {
       walletUser.walletBalance = Number(walletUser.walletBalance || 0) + Number(payout.amount || 0);

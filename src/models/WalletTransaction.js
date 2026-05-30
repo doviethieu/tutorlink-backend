@@ -10,7 +10,7 @@ const walletTransactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['deposit', 'refund', 'withdrawal_hold', 'withdrawal_paid', 'withdrawal_rejected', 'adjustment'],
+      enum: ['deposit', 'refund', 'earning', 'withdrawal_hold', 'withdrawal_paid', 'withdrawal_rejected', 'adjustment'],
       required: true,
       index: true,
     },

@@ -53,12 +53,16 @@ const bookingSchema = new mongoose.Schema({
   meetingUrl: { type: String, default: '' }, // Link phòng học trực tuyến (ZegoCloud/Zoom) nếu học Online
 
   // 🔥 TRẠNG THÁI TIẾNG ANH CHUẨN
-  status: { 
-    type: String, 
-    enum: ['pending', 'confirmed', 'completed', 'cancelled', 'rejected'], 
-    default: 'pending' 
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'completion_pending', 'completed', 'disputed', 'cancelled', 'rejected'],
+    default: 'pending'
   },
   
+  completionRequestedAt: { type: Date, default: null },
+  studentConfirmedAt: { type: Date, default: null },
+  disputedAt: { type: Date, default: null },
+  disputeReason: { type: String, default: '' },
   cancelReason: { type: String, default: '' } // Lý do hủy đơn (nếu có) gửi từ Frontend
 }, { timestamps: true });
 

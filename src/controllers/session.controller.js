@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Session = require('../models/Session');
 const Booking = require('../models/Booking');
-const Tutor = require('../models/Tutor');
 const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 const { ok, fail } = require('../utils/apiResponse');
@@ -62,14 +61,19 @@ const markCompleted = asyncHandler(async (req, res) => {
     return fail(res, 403, 'FORBIDDEN', 'Bạn không có quyền hoàn thành buổi học này');
   }
 
-  session.status = 'completed';
-  session.completedAt = new Date();
+  session.status = 'completion_pending';
+  session.completionRequestedAt = new Date();
   await session.save();
 
+  const booking = await Booking.findByIdAndUpdate(
+    session.bookingId,
+    { status: 'completion_pending', completionRequestedAt: session.completionRequestedAt },
+    { new: true },
+  );
+
   await Promise.all([
-    Booking.findByIdAndUpdate(session.bookingId, { status: 'completed' }),
-    Tutor.findByIdAndUpdate(session.tutorId, { $inc: { session_count: 1 } }),
-    notify(session.studentId, 'session_completed', 'Buổi học đã hoàn thành', 'Bạn có thể đánh giá gia sư cho buổi học vừa hoàn thành'),
+    notify(session.studentId, 'completion_requested', 'Gia sư đã báo hoàn thành buổi học', 'Vui lòng xác nhận đã học hoặc khiếu nại nếu buổi học chưa diễn ra đúng thực tế'),
+    notify(session.tutorUserId, 'completion_pending', 'Đang chờ học viên xác nhận', 'Doanh thu vẫn được giữ trong escrow cho tới khi học viên xác nhận hoặc hết thời gian phản hồi'),
   ]);
 
   return ok(res, session);
