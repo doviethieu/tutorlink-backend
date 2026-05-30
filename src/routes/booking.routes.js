@@ -32,4 +32,12 @@ router.route('/:id/complete')
   .patch(restrictTo('tutor', 'admin'), bookingController.completeBooking)
   .post(restrictTo('tutor', 'admin'), bookingController.completeBooking);
 
+router.route('/:id/confirm-completion')
+  .patch(restrictTo('student', 'admin'), bookingController.confirmCompletion)
+  .post(restrictTo('student', 'admin'), bookingController.confirmCompletion);
+
+router.route('/:id/dispute')
+  .patch(restrictTo('student', 'admin'), bookingController.disputeCompletion)
+  .post(restrictTo('student', 'admin'), bookingController.disputeCompletion);
+
 module.exports = router;

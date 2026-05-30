@@ -13,6 +13,7 @@ const reviewRoutes = require('./review.routes');
 const sessionRoutes = require('./session.routes');
 const tutorRoutes = require('./tutor.routes');
 const userRoutes = require('./user.routes');
+const videoRoutes = require('./video.routes');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
@@ -33,6 +34,7 @@ router.use('/payments', paymentRoutes);
 router.use('/payouts', payoutRoutes);
 router.use('/sessions', sessionRoutes);
 router.use('/users', userRoutes);
+router.use('/video', videoRoutes);
 
 router.use(availabilityRoutes);
 router.use('/favorites', favoriteRoutes);

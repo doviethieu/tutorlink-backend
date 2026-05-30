@@ -5,6 +5,9 @@ const Payment = require('../models/Payment');
 const Payout = require('../models/Payout');
 const Notification = require('../models/Notification');
 const SystemConfig = require('../models/SystemConfig');
+const User = require('../models/User');
+const WalletTransaction = require('../models/WalletTransaction');
+const { releaseTutorEarningsForBooking } = require('./escrow.service');
 
 const DEFAULTS = {
   autoCancelPendingHours: 24,
@@ -120,25 +123,70 @@ async function sessionAutocomplete() {
   const graceHours = await getNumberConfig('session_autocomplete_grace_hours', DEFAULTS.sessionAutocompleteGraceHours);
   const now = new Date();
   const sessions = await Session.find({ status: 'ongoing' }).limit(200);
-  let completed = 0;
+  let pending = 0;
 
   for (const session of sessions) {
     if (addHours(sessionEndAt(session), graceHours) > now) continue;
 
-    session.status = 'completed';
-    session.completedAt = now;
+    session.status = 'completion_pending';
+    session.completionRequestedAt = now;
     await session.save();
-    completed += 1;
+    pending += 1;
+
+    const booking = await Booking.findByIdAndUpdate(
+      session.bookingId,
+      { status: 'completion_pending', completionRequestedAt: now },
+      { new: true },
+    );
 
     await Promise.all([
-      Booking.findByIdAndUpdate(session.bookingId, { status: 'completed' }),
-      Tutor.findByIdAndUpdate(session.tutorId, { $inc: { session_count: 1 } }),
-      notify(session.studentId, 'session_completed', 'Buổi học đã hoàn thành', 'Bạn có thể đánh giá gia sư cho buổi học vừa hoàn thành'),
-      notify(session.tutorUserId, 'session_completed', 'Buổi học đã hoàn thành', 'Doanh thu đủ điều kiện rút tiền sau khi escrow được xử lý'),
+      booking ? null : Promise.resolve(),
+      notify(session.studentId, 'completion_requested', 'Buổi học đang chờ xác nhận', 'Nếu bạn đã học xong, hãy xác nhận để giải ngân cho gia sư. Nếu có vấn đề, hãy gửi khiếu nại.'),
+      notify(
+        session.tutorUserId,
+        'completion_pending',
+        'Đang chờ học viên xác nhận',
+        'Doanh thu vẫn được giữ trong escrow cho tới khi học viên xác nhận hoặc hết thời gian phản hồi',
+      ),
     ]);
   }
 
-  return { completed };
+  const pendingCutoff = addHours(now, -graceHours);
+  const pendingSessions = await Session.find({
+    status: 'completion_pending',
+    completionRequestedAt: { $lte: pendingCutoff },
+  }).limit(200);
+  let completed = 0;
+
+  for (const session of pendingSessions) {
+    const completedAt = now;
+    session.status = 'completed';
+    session.completedAt = completedAt;
+    await session.save();
+    completed += 1;
+
+    const booking = await Booking.findByIdAndUpdate(
+      session.bookingId,
+      { status: 'completed', studentConfirmedAt: completedAt },
+      { new: true },
+    );
+    const releaseResult = await releaseTutorEarningsForBooking(booking, { reason: 'student_no_response_auto_release' });
+
+    await Promise.all([
+      Tutor.findByIdAndUpdate(session.tutorId, { $inc: { session_count: 1 } }),
+      notify(session.studentId, 'session_completed', 'Buổi học đã tự động hoàn thành', 'Hết thời gian phản hồi, hệ thống đã hoàn tất buổi học'),
+      notify(
+        session.tutorUserId,
+        'earning_released',
+        'Doanh thu đã cộng vào ví',
+        releaseResult
+          ? `Số tiền ${releaseResult.amount.toLocaleString('vi-VN')} VND đã sẵn sàng để rút`
+          : 'Buổi học đã hoàn thành',
+      ),
+    ]);
+  }
+
+  return { pending, completed };
 }
 
 async function payoutRelease() {
@@ -146,24 +194,43 @@ async function payoutRelease() {
   let paid = 0;
 
   for (const payout of payouts) {
-    const payments = await Payment.find({ _id: { $in: payout.paymentIds } }).select('bookingId');
-    const bookingIds = payments.map((payment) => payment.bookingId);
-
     payout.status = 'paid';
     payout.processedAt = new Date();
     await payout.save();
 
-    await Promise.all([
-      Payment.updateMany(
-        { _id: { $in: payout.paymentIds }, escrowStatus: 'held' },
-        { escrowStatus: 'released', releasedAt: payout.processedAt },
-      ),
-      Booking.updateMany(
-        { _id: { $in: bookingIds }, escrowStatus: 'held' },
-        { escrowStatus: 'released' },
-      ),
-      notify(payout.tutorUserId, 'payout_paid', 'Đã giải ngân yêu cầu rút tiền', `Số tiền: ${payout.amount.toLocaleString('vi-VN')} VND`),
-    ]);
+    if (['wallet_refund', 'wallet_earning'].includes(payout.source)) {
+      const walletUserId = payout.requesterId || payout.tutorUserId;
+      const walletUser = walletUserId ? await User.findById(walletUserId).select('walletBalance') : null;
+      await Promise.all([
+        WalletTransaction.create({
+          userId: walletUserId,
+          type: 'withdrawal_paid',
+          amount: 0,
+          balanceAfter: walletUser?.walletBalance || 0,
+          description: payout.source === 'wallet_earning'
+            ? 'Hệ thống đã xác nhận chuyển khoản rút doanh thu gia sư'
+            : 'Hệ thống đã xác nhận chuyển khoản rút tiền từ ví',
+          referenceType: 'Payout',
+          referenceId: payout._id,
+        }),
+        notify(walletUserId, 'payout_paid', 'Đã giải ngân yêu cầu rút tiền', `Số tiền: ${payout.amount.toLocaleString('vi-VN')} VND`),
+      ]);
+    } else {
+      const payments = await Payment.find({ _id: { $in: payout.paymentIds } }).select('bookingId');
+      const bookingIds = payments.map((payment) => payment.bookingId);
+
+      await Promise.all([
+        Payment.updateMany(
+          { _id: { $in: payout.paymentIds }, escrowStatus: 'held' },
+          { escrowStatus: 'released', releasedAt: payout.processedAt },
+        ),
+        Booking.updateMany(
+          { _id: { $in: bookingIds }, escrowStatus: 'held' },
+          { escrowStatus: 'released' },
+        ),
+        notify(payout.tutorUserId, 'payout_paid', 'Đã giải ngân yêu cầu rút tiền', `Số tiền: ${payout.amount.toLocaleString('vi-VN')} VND`),
+      ]);
+    }
 
     paid += 1;
   }

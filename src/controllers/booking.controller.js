@@ -10,6 +10,7 @@ const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
 const asyncHandler = require('../utils/asyncHandler');
 const { ok, fail } = require('../utils/apiResponse');
+const { releaseTutorEarningsForBooking } = require('../services/escrow.service');
 
 function addHours(time, hours) {
   const [h, m] = String(time).split(':').map(Number);
@@ -69,6 +70,10 @@ function formatBooking(booking, review = null) {
     goal: obj.goal,
     message: obj.message,
     meetingUrl: obj.meetingUrl,
+    completionRequestedAt: obj.completionRequestedAt,
+    studentConfirmedAt: obj.studentConfirmedAt,
+    disputedAt: obj.disputedAt,
+    disputeReason: obj.disputeReason,
     cancelReason: obj.cancelReason,
     cancelledReason: obj.cancelReason,
     selectedSchedule: obj.selectedSchedule || [],
@@ -419,18 +424,94 @@ const completeBooking = asyncHandler(async (req, res) => {
     return fail(res, 409, 'INVALID_STATUS', 'Chỉ có thể hoàn thành booking đã xác nhận');
   }
 
-  booking.status = 'completed';
+  booking.status = 'completion_pending';
+  booking.completionRequestedAt = new Date();
   await booking.save();
 
   await Promise.all([
-    Session.updateOne({ bookingId: booking._id }, { status: 'completed', completedAt: new Date() }),
-    Tutor.findByIdAndUpdate(booking.tutorId._id || booking.tutorId, { $inc: { session_count: 1 } }),
+    Session.updateOne(
+      { bookingId: booking._id },
+      { status: 'completion_pending', completionRequestedAt: booking.completionRequestedAt },
+    ),
     notify(
       booking.studentId._id || booking.studentId,
-      'session_completed',
-      'Buổi học đã hoàn thành',
-      'Bạn có thể đánh giá gia sư cho buổi học vừa hoàn thành',
+      'completion_requested',
+      'Gia sư đã báo hoàn thành buổi học',
+      'Vui lòng xác nhận đã học hoặc gửi khiếu nại nếu buổi học chưa diễn ra đúng thực tế',
     ),
+    notify(
+      booking.tutorUserId,
+      'completion_pending',
+      'Đang chờ học viên xác nhận',
+      'Doanh thu vẫn được giữ trong escrow cho tới khi học viên xác nhận hoặc hết thời gian phản hồi',
+    ),
+  ]);
+
+  return ok(res, formatBooking(booking));
+});
+
+const confirmCompletion = asyncHandler(async (req, res) => {
+  const booking = await loadBookingForAction(req.params.id);
+  if (!booking) return fail(res, 404, 'NOT_FOUND', 'Không tìm thấy booking');
+
+  if (String(booking.studentId?._id || booking.studentId) !== String(req.user._id) && req.user.role !== 'admin') {
+    return fail(res, 403, 'FORBIDDEN', 'Chỉ học viên hoặc admin được xác nhận hoàn thành');
+  }
+
+  if (booking.status !== 'completion_pending') {
+    return fail(res, 409, 'INVALID_STATUS', 'Chỉ xác nhận được booking đang chờ học viên xác nhận');
+  }
+
+  booking.status = 'completed';
+  booking.studentConfirmedAt = new Date();
+  await booking.save();
+
+  const releaseResult = await releaseTutorEarningsForBooking(booking, { reason: 'student_confirmed_completion' });
+
+  await Promise.all([
+    Session.updateOne(
+      { bookingId: booking._id },
+      { status: 'completed', completedAt: booking.studentConfirmedAt, studentConfirmedAt: booking.studentConfirmedAt },
+    ),
+    Tutor.findByIdAndUpdate(booking.tutorId._id || booking.tutorId, { $inc: { session_count: 1 } }),
+    notify(booking.studentId._id || booking.studentId, 'session_completed', 'Đã xác nhận hoàn thành', 'Bạn có thể đánh giá gia sư cho buổi học vừa hoàn thành'),
+    notify(
+      booking.tutorUserId,
+      'earning_released',
+      'Học viên đã xác nhận buổi học',
+      releaseResult
+        ? `Doanh thu ${releaseResult.amount.toLocaleString('vi-VN')} VND đã cộng vào ví`
+        : 'Buổi học đã được xác nhận hoàn thành',
+    ),
+  ]);
+
+  return ok(res, formatBooking(booking));
+});
+
+const disputeCompletion = asyncHandler(async (req, res) => {
+  const booking = await loadBookingForAction(req.params.id);
+  if (!booking) return fail(res, 404, 'NOT_FOUND', 'Không tìm thấy booking');
+
+  if (String(booking.studentId?._id || booking.studentId) !== String(req.user._id) && req.user.role !== 'admin') {
+    return fail(res, 403, 'FORBIDDEN', 'Chỉ học viên hoặc admin được gửi khiếu nại');
+  }
+
+  if (!['confirmed', 'completion_pending'].includes(booking.status)) {
+    return fail(res, 409, 'INVALID_STATUS', 'Chỉ khiếu nại được booking đã xác nhận hoặc đang chờ xác nhận hoàn thành');
+  }
+
+  booking.status = 'disputed';
+  booking.disputedAt = new Date();
+  booking.disputeReason = req.body.reason || 'Học viên báo buổi học chưa diễn ra đúng thực tế';
+  await booking.save();
+
+  await Promise.all([
+    Session.updateOne(
+      { bookingId: booking._id },
+      { status: 'disputed', disputedAt: booking.disputedAt, disputeReason: booking.disputeReason },
+    ),
+    notify(booking.studentId._id || booking.studentId, 'session_disputed', 'Đã gửi khiếu nại', 'Escrow sẽ tiếp tục được giữ cho tới khi admin xử lý'),
+    notify(booking.tutorUserId, 'session_disputed', 'Học viên đã khiếu nại buổi học', booking.disputeReason),
   ]);
 
   return ok(res, formatBooking(booking));
@@ -445,4 +526,6 @@ module.exports = {
   rejectBooking,
   cancelBooking,
   completeBooking,
+  confirmCompletion,
+  disputeCompletion,
 };

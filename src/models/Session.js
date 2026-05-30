@@ -42,7 +42,7 @@ const sessionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['upcoming', 'ongoing', 'completed', 'cancelled'],
+      enum: ['upcoming', 'ongoing', 'completion_pending', 'completed', 'disputed', 'cancelled'],
       default: 'upcoming',
       index: true,
     },
@@ -53,6 +53,22 @@ const sessionSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
       default: null,
+    },
+    completionRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    studentConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    disputedAt: {
+      type: Date,
+      default: null,
+    },
+    disputeReason: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true },

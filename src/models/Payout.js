@@ -22,7 +22,7 @@ const payoutSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ['tutor_escrow', 'wallet_refund'],
+      enum: ['tutor_escrow', 'wallet_refund', 'wallet_earning'],
       default: 'tutor_escrow',
       index: true,
     },

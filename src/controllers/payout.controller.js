@@ -56,14 +56,27 @@ const getSummary = asyncHandler(async (req, res) => {
   if (!tutor) return fail(res, 404, 'TUTOR_NOT_FOUND', 'Không tìm thấy hồ sơ gia sư');
 
   const data = await getAvailablePayoutData(tutor);
+  const walletBalance = Number(req.user.walletBalance || 0);
+  const pendingWalletPayouts = await Payout.aggregate([
+    {
+      $match: {
+        $or: [{ requesterId: req.user._id }, { tutorUserId: req.user._id }],
+        source: { $in: ['wallet_refund', 'wallet_earning'] },
+        status: { $in: ['pending', 'approved'] },
+      },
+    },
+    { $group: { _id: null, total: { $sum: '$amount' } } },
+  ]);
   const paidAmount = await Payout.aggregate([
-    { $match: { tutorId: tutor._id, status: 'paid' } },
+    { $match: { $or: [{ tutorId: tutor._id }, { requesterId: req.user._id }, { tutorUserId: req.user._id }], status: 'paid' } },
     { $group: { _id: null, total: { $sum: '$amount' } } },
   ]);
 
   return ok(res, {
-    availableAmount: data.availableAmount,
-    lockedAmount: data.lockedAmount,
+    availableAmount: walletBalance,
+    walletBalance,
+    escrowAvailableAmount: data.availableAmount,
+    lockedAmount: data.lockedAmount + (pendingWalletPayouts[0]?.total || 0),
     paidAmount: paidAmount[0]?.total || 0,
     availableSessionCount: data.sessions.length,
     availablePaymentIds: data.payments.map((payment) => payment._id),
@@ -75,10 +88,52 @@ const requestPayout = asyncHandler(async (req, res) => {
   if (!tutor) return fail(res, 404, 'TUTOR_NOT_FOUND', 'Không tìm thấy hồ sơ gia sư');
 
   const data = await getAvailablePayoutData(tutor);
-  const requestedAmount = Number(req.body.amount || data.availableAmount);
+  const walletBalance = Number(req.user.walletBalance || 0);
+  const requestedAmount = Number(req.body.amount || walletBalance || data.availableAmount);
   if (!requestedAmount || requestedAmount <= 0) {
     return fail(res, 400, 'VALIDATION_ERROR', 'Số tiền rút phải lớn hơn 0');
   }
+
+  if (walletBalance > 0) {
+    if (requestedAmount > walletBalance) {
+      return fail(res, 409, 'INSUFFICIENT_BALANCE', 'Số dư ví không đủ để rút');
+    }
+
+    req.user.walletBalance = walletBalance - requestedAmount;
+    await req.user.save();
+
+    const payout = await Payout.create({
+      tutorId: tutor._id,
+      tutorUserId: tutor.userId,
+      requesterId: req.user._id,
+      source: 'wallet_earning',
+      amount: requestedAmount,
+      bankName: req.body.bankName,
+      bankAccount: req.body.bankAccount,
+      bankAccountName: req.body.bankAccountName,
+      note: req.body.note || 'Rút doanh thu từ ví gia sư',
+    });
+
+    await WalletTransaction.create({
+      userId: req.user._id,
+      type: 'withdrawal_hold',
+      amount: -requestedAmount,
+      balanceAfter: req.user.walletBalance,
+      description: 'Gửi yêu cầu rút doanh thu từ ví gia sư',
+      referenceType: 'Payout',
+      referenceId: payout._id,
+    });
+
+    await Notification.create({
+      userId: tutor.userId,
+      type: 'payout_requested',
+      title: 'Đã gửi yêu cầu rút tiền',
+      body: `Yêu cầu rút ${requestedAmount.toLocaleString('vi-VN')} VND từ ví gia sư đang chờ admin xử lý`,
+    }).catch(() => null);
+
+    return ok(res, payout, undefined, 201);
+  }
+
   if (requestedAmount > data.availableAmount) {
     return fail(res, 409, 'INSUFFICIENT_BALANCE', 'Số dư khả dụng không đủ để rút');
   }
@@ -194,7 +249,7 @@ const updatePayoutStatus = asyncHandler(async (req, res) => {
     ]);
   }
 
-  if (payout.source === 'wallet_refund') {
+  if (['wallet_refund', 'wallet_earning'].includes(payout.source)) {
     const walletUserId = payout.requesterId || payout.tutorUserId;
     if (nextStatus === 'rejected' && walletUserId) {
       const user = await User.findById(walletUserId);
@@ -220,7 +275,9 @@ const updatePayoutStatus = asyncHandler(async (req, res) => {
         type: 'withdrawal_paid',
         amount: 0,
         balanceAfter: user?.walletBalance || 0,
-        description: 'Admin đã xác nhận chuyển khoản rút tiền từ ví',
+        description: payout.source === 'wallet_earning'
+          ? 'Admin đã xác nhận chuyển khoản rút doanh thu gia sư'
+          : 'Admin đã xác nhận chuyển khoản rút tiền từ ví',
         referenceType: 'Payout',
         referenceId: payout._id,
       });
