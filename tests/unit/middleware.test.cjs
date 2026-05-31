@@ -53,3 +53,10 @@ test('validate returns 422 when schema is invalid', () => {
   assert.equal(res.statusCode, 422);
   assert.deepEqual(res.body.error.details, { amount: 'required' });
 });
+test('rateLimitPlaceholder delegates immediately', () => {
+  let called = false;
+  rateLimitPlaceholder({}, {}, () => {
+    called = true;
+  });
+  assert.equal(called, true);
+});
