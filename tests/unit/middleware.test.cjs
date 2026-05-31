@@ -60,3 +60,40 @@ test('rateLimitPlaceholder delegates immediately', () => {
   });
   assert.equal(called, true);
 });
+test('protect rejects requests without bearer token', async () => {
+  const res = createMockResponse();
+  await protect({ headers: {} }, res, () => {});
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.body.error.code, 'UNAUTHORIZED');
+});
+
+test('protect accepts valid tokens and rejects revoked or inactive users', async () => {
+  const token = jwt.sign({ userId: 'user1', role: 'student' }, env.jwtSecret, { expiresIn: '5m' });
+  const activeUser = { _id: 'user1', role: 'student', isActive: true };
+
+  await withPatched(TokenBlacklist, { findOne: async () => null }, async () => {
+    await withPatched(User, { findOne: async () => activeUser }, async () => {
+      const req = { headers: { authorization: `Bearer ${token}` } };
+      const res = createMockResponse();
+      let called = false;
+      await protect(req, res, () => { called = true; });
+      assert.equal(called, true);
+      assert.equal(req.user, activeUser);
+      assert.equal(req.accessToken, token);
+    });
+  });
+
+  await withPatched(TokenBlacklist, { findOne: async () => ({ tokenHash: 'revoked' }) }, async () => {
+    const res = createMockResponse();
+    await protect({ headers: { authorization: `Bearer ${token}` } }, res, () => {});
+    assert.equal(res.body.error.code, 'TOKEN_REVOKED');
+  });
+
+  await withPatched(TokenBlacklist, { findOne: async () => null }, async () => {
+    await withPatched(User, { findOne: async () => ({ _id: 'user1', isActive: false }) }, async () => {
+      const res = createMockResponse();
+      await protect({ headers: { authorization: `Bearer ${token}` } }, res, () => {});
+      assert.equal(res.statusCode, 401);
+    });
+  });
+});
