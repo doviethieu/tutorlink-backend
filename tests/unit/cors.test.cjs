@@ -32,3 +32,8 @@ test('CORS blocks unknown origins', async () => {
   assert.match(result.error.message, /CORS blocked origin/);
   assert.equal(result.allowed, undefined);
 });
+test('CORS exposes expected HTTP methods and headers', () => {
+  assert.deepEqual(corsOptions.methods, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+  assert.ok(corsOptions.allowedHeaders.includes('Authorization'));
+  assert.equal(corsOptions.credentials, true);
+});
