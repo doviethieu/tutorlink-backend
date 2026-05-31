@@ -29,3 +29,18 @@ test('asyncHandler forwards rejected errors to next', async () => {
 
   assert.equal(forwarded, err);
 });
+test('notFound returns a normalized 404 response', () => {
+  const res = createMockResponse();
+
+  notFound({}, res);
+
+  assert.equal(res.statusCode, 404);
+  assert.deepEqual(res.body, {
+    success: false,
+    data: null,
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Route không tồn tại',
+    },
+  });
+});
