@@ -25,3 +25,10 @@ test('CORS allows configured frontend origins', async () => {
   assert.equal(result.error, null);
   assert.equal(result.allowed, true);
 });
+test('CORS blocks unknown origins', async () => {
+  const result = await evaluateOrigin('https://evil.example.com');
+
+  assert.ok(result.error instanceof Error);
+  assert.match(result.error.message, /CORS blocked origin/);
+  assert.equal(result.allowed, undefined);
+});
