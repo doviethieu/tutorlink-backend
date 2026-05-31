@@ -32,3 +32,24 @@ test('restrictTo rejects missing or mismatched roles', () => {
   assert.equal(res.statusCode, 403);
   assert.equal(res.body.error.code, 'FORBIDDEN');
 });
+test('validate calls next when schema is valid', () => {
+  const req = { body: { amount: 1 } };
+  const res = createMockResponse();
+  let called = false;
+
+  validate(() => ({ valid: true }))(req, res, () => {
+    called = true;
+  });
+
+  assert.equal(called, true);
+});
+
+test('validate returns 422 when schema is invalid', () => {
+  const req = { body: {} };
+  const res = createMockResponse();
+
+  validate(() => ({ valid: false, errors: { amount: 'required' } }))(req, res, () => {});
+
+  assert.equal(res.statusCode, 422);
+  assert.deepEqual(res.body.error.details, { amount: 'required' });
+});
