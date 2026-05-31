@@ -44,3 +44,46 @@ test('notFound returns a normalized 404 response', () => {
     },
   });
 });
+test('errorHandler returns request error details for non-500 errors', () => {
+  const res = createMockResponse();
+  const err = new AppError('Sai dữ liệu', 400, 'VALIDATION_ERROR', { field: 'amount' });
+
+  errorHandler(err, {}, res, () => {});
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body.error, {
+    code: 'VALIDATION_ERROR',
+    message: 'Sai dữ liệu',
+    details: { field: 'amount' },
+  });
+});
+
+test('errorHandler masks 500 errors', () => {
+  const res = createMockResponse();
+  const originalError = console.error;
+  console.error = () => {};
+
+  try {
+    errorHandler(new Error('database secret'), {}, res, () => {});
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(res.statusCode, 500);
+  assert.deepEqual(res.body.error, {
+    code: 'INTERNAL_ERROR',
+    message: 'Lỗi hệ thống nội bộ',
+  });
+});
+
+test('errorHandler delegates when headers have already been sent', () => {
+  const res = { headersSent: true };
+  const err = new Error('late');
+  let delegated;
+
+  errorHandler(err, {}, res, (error) => {
+    delegated = error;
+  });
+
+  assert.equal(delegated, err);
+});
